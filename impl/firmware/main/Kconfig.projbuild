@@ -2,10 +2,10 @@ menu "PA Reader"
 
 config PAREADER_PN532_SDA_GPIO
     int "PN532 SDA GPIO"
-    default 11
+    default 2
 
 config PAREADER_PN532_SCL_GPIO
     int "PN532 SCL GPIO"
-    default 12
+    default 3
 
 endmenu

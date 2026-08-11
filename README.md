@@ -90,8 +90,8 @@ Default wiring:
 |---|---:|
 | `VCC` | `3V3` |
 | `GND` | `GND` |
-| `SDA` | `GPIO11` |
-| `SCL` | `GPIO12` |
+| `SDA` | `GPIO2` |
+| `SCL` | `GPIO3` |
 
 The PN532 uses 7-bit I2C address `0x24` at 100 kHz. SDA and SCL are
 configurable under **PA Reader** in `idf.py menuconfig`. Use the ESP32-S3 native

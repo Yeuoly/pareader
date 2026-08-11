@@ -22,8 +22,8 @@ Set the Elechouse NFC Module V3 to I2C mode before power-up:
 
 | NFC Module V3 | ESP32-S3 | Configuration |
 |---|---:|---|
-| `SDA` | GPIO 11 | `PAREADER_PN532_SDA_GPIO` |
-| `SCL` | GPIO 12 | `PAREADER_PN532_SCL_GPIO` |
+| `SDA` | GPIO 2 | `PAREADER_PN532_SDA_GPIO` |
+| `SCL` | GPIO 3 | `PAREADER_PN532_SCL_GPIO` |
 | `GND` | GND | Common ground |
 | `VCC` | 3V3 | Module supply |
 
