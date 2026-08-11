@@ -1,12 +1,11 @@
 package hid
 
 import (
-	"errors"
-
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
 
-var ErrUnknownSignal = errors.New("unknown HID signal")
+const ErrUnknownSignal errcode.Code = "E0304"
 
 type SignalHandler func([]byte) error
 

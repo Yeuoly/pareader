@@ -49,12 +49,20 @@ go run ./cmd/reader -vid 5041 -pid 5245 -serial SERIAL
 ## Build the DLL
 
 ```sh
+go install mvdan.cc/garble@v0.14.2
 make dll
 ```
 
-`make dll` targets Windows amd64 with cgo and needs a Windows cgo compiler such
-as MinGW-w64 when run on another operating system. It emits `build/aimeio.dll`
-and the generated C header.
+`make dll` targets Windows amd64 with cgo, applies Garble tiny mode and C link
+time optimization, and needs a Windows cgo compiler such as MinGW-w64 when run
+on another operating system. It emits `build/aimeio.dll` and the generated C
+header. Tiny mode removes panic, fatal-error, trace, and source-position
+diagnostics from the release DLL. HIDAPI remains the Windows HID backend, but
+its internal C API is not re-exported from the AimeIO DLL.
+
+Garble `v0.14.2` is pinned because it builds with the module's Go 1.24 toolchain.
+`make dll-plain` produces a stripped DLL without Garble when runtime diagnostics
+are required. Override `GARBLE` or `WINDOWS_CC` to select non-default tool paths.
 
 | Environment variable | Default | Meaning |
 |---|---|---|
@@ -63,3 +71,45 @@ and the generated C header.
 | `PAREADER_SERIAL` | empty | Optional exact serial match |
 | `PAREADER_TIMEOUT` | `1s` | Local request timeout for request-response commands |
 
+## Error codes
+
+Errors defined by PA Reader are named constants whose printable value is a
+stable five-character code:
+
+```go
+const ErrInvalidReport errcode.Code = "E0401"
+```
+
+This keeps release diagnostics small while preserving normal Go error
+comparisons such as `errors.Is(err, protocol.ErrInvalidReport)`. Error-number
+ranges identify the responsible layer.
+
+| Code | Constant | Meaning |
+|---|---|---|
+| `E0101` | `config.ErrInvalidVendorID` | Invalid configured USB vendor ID |
+| `E0102` | `config.ErrInvalidProductID` | Invalid configured USB product ID |
+| `E0103` | `config.ErrInvalidTimeout` | Invalid configured request timeout |
+| `E0104` | `config.ErrInvalidHexID` | Invalid generic 16-bit hexadecimal ID |
+| `E0201` | `hid.ErrEnumerate` | HID enumeration failed |
+| `E0202` | `hid.ErrDeviceNotFound` | Matching PRHP HID device was not found |
+| `E0203` | `hid.ErrOpen` | HID device open failed |
+| `E0204` | `hid.ErrShortReport` | HID read or write had an invalid length |
+| `E0205` | `hid.ErrClosed` | Write attempted after transport shutdown |
+| `E0206` | `hid.ErrRead` | HID read failed |
+| `E0207` | `hid.ErrWrite` | HID write failed |
+| `E0208` | `hid.ErrClose` | HID close failed |
+| `E0301` | `hid.ErrInvalidTimeout` | Caller timeout is not positive |
+| `E0302` | `hid.ErrSequenceExhausted` | No request sequence is available |
+| `E0303` | `hid.ErrUnknownSequence` | Response sequence is unknown, expired, or consumed |
+| `E0304` | `hid.ErrUnknownSignal` | No handler is registered for a signal opcode |
+| `E0305` | `hid.ErrCallerCacheInit` | Caller cache construction failed |
+| `E0401` | `protocol.ErrInvalidReport` | PRHP report shape or header is invalid |
+| `E0402` | `protocol.ErrInvalidType` | PRHP message type value is invalid |
+| `E0403` | `protocol.ErrUnexpectedCode` | Response opcode does not match the request |
+| `E0404` | `protocol.ErrUnexpectedType` | Valid message has the wrong type for the operation |
+| `E0405` | `protocol.ErrUnknownCard` | Card-state signal contains an unknown card type |
+| `E0406` | `protocol.ErrCommandFailed` | Device returned a non-success PRHP status |
+| `E0501` | `aimeio.ErrTimeout` | Request timed out |
+| `E0502` | `aimeio.ErrDisconnected` | Service stopped without a transport error |
+| `E0503` | `aimeio.ErrContextDone` | Request context was canceled or expired |
+| `E0601` | `errUnsupportedVersion` | Terminal reader received an unsupported PRHP version |

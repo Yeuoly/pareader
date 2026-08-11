@@ -119,14 +119,19 @@ Allocate(timeout time.Duration) (sequence uint16, response <-chan []byte, err er
 Consume(sequence uint16, raw []byte) error
 ```
 
-It uses `github.com/jellydator/ttlcache/v3` as a concurrency-safe, time-based
-LRU. It does not start the cache cleanup goroutine. Expiration is observed
-lazily, and the business layer never deletes a timed-out entry manually.
+It uses `github.com/elastic/go-freelru` as a concurrency-safe, time-based LRU.
+It does not start a cache cleanup goroutine. Expiration is observed lazily, and
+the business layer never deletes a timed-out entry manually.
 
 ```go
 type Caller struct {
     next  atomic.Uint32
-    calls *ttlcache.Cache[uint16, chan []byte]
+    calls *freelru.SyncedLRU[uint16, *pendingCall]
+}
+
+type pendingCall struct {
+    response chan []byte
+    consumed atomic.Bool
 }
 
 func (c *Caller) Allocate(timeout time.Duration) (uint16, <-chan []byte, error) {
@@ -140,25 +145,25 @@ func (c *Caller) Allocate(timeout time.Duration) (uint16, <-chan []byte, error) 
             continue
         }
 
-        response := make(chan []byte, 1)
-        _, found := c.calls.GetOrSet(
-            sequence,
-            response,
-            ttlcache.WithTTL[uint16, chan []byte](timeout),
-        )
-        if !found {
-            return sequence, response, nil
+        if _, found := c.calls.Get(sequence); found {
+            continue
         }
+
+        call := &pendingCall{response: make(chan []byte, 1)}
+        c.calls.AddWithLifetime(sequence, call, timeout)
+        return sequence, call.response, nil
     }
     return 0, nil, ErrSequenceExhausted
 }
 
 func (c *Caller) Consume(sequence uint16, raw []byte) error {
-    item, found := c.calls.GetAndDelete(sequence)
-    if !found {
+    call, found := c.calls.Get(sequence)
+    if !found || !call.consumed.CompareAndSwap(false, true) {
         return ErrUnknownSequence
     }
-    item.Value() <- bytes.Clone(raw)
+
+    c.calls.Remove(sequence)
+    call.response <- bytes.Clone(raw)
     return nil
 }
 ```

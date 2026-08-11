@@ -1,18 +1,23 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	"github.com/Yeuoly/pareader/impl/dll/internal/hid"
 )
 
 const (
 	DefaultVendorID  uint16 = 0x5041
 	DefaultProductID uint16 = 0x5245
+
+	ErrInvalidVendorID  errcode.Code = "E0101"
+	ErrInvalidProductID errcode.Code = "E0102"
+	ErrInvalidTimeout   errcode.Code = "E0103"
+	ErrInvalidHexID     errcode.Code = "E0104"
 )
 
 type Config struct {
@@ -23,15 +28,15 @@ type Config struct {
 func FromEnvironment() (Config, error) {
 	vendorID, err := parseUint16(environment("PAREADER_VID", "5041"))
 	if err != nil {
-		return Config{}, fmt.Errorf("PAREADER_VID: %w", err)
+		return Config{}, ErrInvalidVendorID
 	}
 	productID, err := parseUint16(environment("PAREADER_PID", "5245"))
 	if err != nil {
-		return Config{}, fmt.Errorf("PAREADER_PID: %w", err)
+		return Config{}, ErrInvalidProductID
 	}
 	timeout, err := time.ParseDuration(environment("PAREADER_TIMEOUT", "1s"))
 	if err != nil {
-		return Config{}, fmt.Errorf("PAREADER_TIMEOUT: %w", err)
+		return Config{}, ErrInvalidTimeout
 	}
 
 	return Config{
@@ -55,7 +60,7 @@ func parseUint16(value string) (uint16, error) {
 	value = strings.TrimPrefix(strings.TrimPrefix(value, "0x"), "0X")
 	parsed, err := strconv.ParseUint(value, 16, 16)
 	if err != nil {
-		return 0, err
+		return 0, ErrInvalidHexID
 	}
 	return uint16(parsed), nil
 }

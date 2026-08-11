@@ -11,6 +11,7 @@ import (
 
 	"github.com/Yeuoly/pareader/impl/dll/internal/aimeio"
 	"github.com/Yeuoly/pareader/impl/dll/internal/config"
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	pareaderhid "github.com/Yeuoly/pareader/impl/dll/internal/hid"
 )
 
@@ -31,11 +32,11 @@ func run() error {
 
 	vid, err := config.ParseUint16(*vidText)
 	if err != nil {
-		return fmt.Errorf("invalid -vid: %w", err)
+		return config.ErrInvalidVendorID
 	}
 	pid, err := config.ParseUint16(*pidText)
 	if err != nil {
-		return fmt.Errorf("invalid -pid: %w", err)
+		return config.ErrInvalidProductID
 	}
 
 	device, info, err := pareaderhid.Open(pareaderhid.DeviceConfig{
@@ -54,10 +55,10 @@ func run() error {
 
 	version, err := service.Version(context.Background())
 	if err != nil {
-		return fmt.Errorf("query protocol version: %w", err)
+		return err
 	}
 	if version.Major != 0 || version.Minor != 1 {
-		return fmt.Errorf("unsupported PRHP version %d.%d", version.Major, version.Minor)
+		return errUnsupportedVersion
 	}
 
 	model := newModel(service, info, version, *interval)
@@ -65,3 +66,5 @@ func run() error {
 	_, err = program.Run()
 	return err
 }
+
+const errUnsupportedVersion errcode.Code = "E0601"

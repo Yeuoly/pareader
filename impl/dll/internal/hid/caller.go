@@ -2,31 +2,40 @@ package hid
 
 import (
 	"bytes"
-	"errors"
 	"sync/atomic"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
+	freelru "github.com/elastic/go-freelru"
+
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 )
 
 const callerCapacity = 1024
 
-var (
-	ErrInvalidTimeout    = errors.New("invalid HID call timeout")
-	ErrSequenceExhausted = errors.New("HID sequence space exhausted")
-	ErrUnknownSequence   = errors.New("unknown or expired HID sequence")
+const (
+	ErrInvalidTimeout    errcode.Code = "E0301"
+	ErrSequenceExhausted errcode.Code = "E0302"
+	ErrUnknownSequence   errcode.Code = "E0303"
+	ErrCallerCacheInit   errcode.Code = "E0305"
 )
 
 type Caller struct {
 	next  atomic.Uint32
-	calls *ttlcache.Cache[uint16, chan []byte]
+	calls *freelru.SyncedLRU[uint16, *pendingCall]
+}
+
+type pendingCall struct {
+	response chan []byte
+	consumed atomic.Bool
 }
 
 func NewCaller() *Caller {
-	calls := ttlcache.New[uint16, chan []byte](
-		ttlcache.WithCapacity[uint16, chan []byte](callerCapacity),
-		ttlcache.WithDisableTouchOnHit[uint16, chan []byte](),
-	)
+	calls, err := freelru.NewSynced[uint16, *pendingCall](callerCapacity, func(sequence uint16) uint32 {
+		return uint32(sequence)
+	})
+	if err != nil {
+		panic(ErrCallerCacheInit)
+	}
 	return &Caller{calls: calls}
 }
 
@@ -41,26 +50,25 @@ func (c *Caller) Allocate(timeout time.Duration) (uint16, <-chan []byte, error) 
 			continue
 		}
 
-		response := make(chan []byte, 1)
-		_, found := c.calls.GetOrSet(
-			sequence,
-			response,
-			ttlcache.WithTTL[uint16, chan []byte](timeout),
-		)
-		if !found {
-			return sequence, response, nil
+		if _, found := c.calls.Get(sequence); found {
+			continue
 		}
+
+		call := &pendingCall{response: make(chan []byte, 1)}
+		c.calls.AddWithLifetime(sequence, call, timeout)
+		return sequence, call.response, nil
 	}
 
 	return 0, nil, ErrSequenceExhausted
 }
 
 func (c *Caller) Consume(sequence uint16, raw []byte) error {
-	item, found := c.calls.GetAndDelete(sequence)
-	if !found {
+	call, found := c.calls.Get(sequence)
+	if !found || !call.consumed.CompareAndSwap(false, true) {
 		return ErrUnknownSequence
 	}
 
-	item.Value() <- bytes.Clone(raw)
+	c.calls.Remove(sequence)
+	call.response <- bytes.Clone(raw)
 	return nil
 }

@@ -1,7 +1,5 @@
 package protocol
 
-import "fmt"
-
 type CardType byte
 
 const (
@@ -23,10 +21,10 @@ func DecodeCardStateSignal(raw []byte) (Card, error) {
 		return Card{}, err
 	}
 	if header.Type != MessageSignal {
-		return Card{}, fmt.Errorf("%w: got 0x%02X, want SIGNAL", ErrUnexpectedType, byte(header.Type))
+		return Card{}, ErrUnexpectedType
 	}
 	if header.Opcode != OpcodeCardState {
-		return Card{}, fmt.Errorf("%w: got 0x%02X, want 0x%02X", ErrUnexpectedCode, header.Opcode, OpcodeCardState)
+		return Card{}, ErrUnexpectedCode
 	}
 
 	card := Card{Type: CardType(raw[5])}
@@ -44,14 +42,14 @@ func DecodeCardStateSignal(raw []byte) (Card, error) {
 		copy(card.IDm[:], raw[6:14])
 		return card, nil
 	default:
-		return Card{}, fmt.Errorf("%w: 0x%02X", ErrUnknownCard, byte(card.Type))
+		return Card{}, ErrUnknownCard
 	}
 }
 
 func validateLUID(luid [10]byte) error {
 	for _, value := range luid {
 		if value>>4 > 9 || value&0x0F > 9 {
-			return fmt.Errorf("%w: invalid packed-BCD LUID", ErrInvalidReport)
+			return ErrInvalidReport
 		}
 	}
 	return nil
@@ -67,6 +65,11 @@ func FormatLUID(luid [10]byte) string {
 }
 
 func FormatIDm(idm [8]byte) string {
-	return fmt.Sprintf("%02X%02X%02X%02X%02X%02X%02X%02X",
-		idm[0], idm[1], idm[2], idm[3], idm[4], idm[5], idm[6], idm[7])
+	const hex = "0123456789ABCDEF"
+	result := make([]byte, len(idm)*2)
+	for i, value := range idm {
+		result[i*2] = hex[value>>4]
+		result[i*2+1] = hex[value&0x0F]
+	}
+	return string(result)
 }

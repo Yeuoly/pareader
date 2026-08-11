@@ -2,12 +2,11 @@ package hid
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"sync/atomic"
 
 	khid "github.com/sstallion/go-hid"
 
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
 
@@ -16,10 +15,15 @@ const (
 	DefaultUsage     uint16 = 0x0001
 )
 
-var (
-	ErrDeviceNotFound = errors.New("PA Reader HID device not found")
-	ErrShortReport    = errors.New("short HID report")
-	ErrClosed         = errors.New("PA Reader HID device is closed")
+const (
+	ErrEnumerate      errcode.Code = "E0201"
+	ErrDeviceNotFound errcode.Code = "E0202"
+	ErrOpen           errcode.Code = "E0203"
+	ErrShortReport    errcode.Code = "E0204"
+	ErrClosed         errcode.Code = "E0205"
+	ErrRead           errcode.Code = "E0206"
+	ErrWrite          errcode.Code = "E0207"
+	ErrClose          errcode.Code = "E0208"
 )
 
 type DeviceConfig struct {
@@ -70,7 +74,7 @@ func Open(config DeviceConfig) (*Device, DeviceInfo, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, DeviceInfo{}, fmt.Errorf("enumerate PA Reader HID: %w", err)
+		return nil, DeviceInfo{}, ErrEnumerate
 	}
 	if selected == nil {
 		return nil, DeviceInfo{}, ErrDeviceNotFound
@@ -78,7 +82,7 @@ func Open(config DeviceConfig) (*Device, DeviceInfo, error) {
 
 	device, err := khid.OpenPath(selected.Path)
 	if err != nil {
-		return nil, DeviceInfo{}, fmt.Errorf("open PA Reader HID: %w", err)
+		return nil, DeviceInfo{}, ErrOpen
 	}
 	transport := &Device{
 		device:     device,
@@ -102,17 +106,17 @@ func (d *Device) Read() ([]byte, error) {
 	raw := make([]byte, protocol.ReportSize)
 	n, err := d.device.Read(raw)
 	if err != nil {
-		return nil, fmt.Errorf("read HID report: %w", err)
+		return nil, ErrRead
 	}
 	if n != protocol.ReportSize {
-		return nil, fmt.Errorf("%w: got %d bytes, want %d", ErrShortReport, n, protocol.ReportSize)
+		return nil, ErrShortReport
 	}
 	return raw, nil
 }
 
 func (d *Device) Write(raw []byte) error {
 	if len(raw) != protocol.ReportSize {
-		return fmt.Errorf("%w: got %d bytes, want %d", protocol.ErrInvalidReport, len(raw), protocol.ReportSize)
+		return protocol.ErrInvalidReport
 	}
 	select {
 	case d.writes <- bytes.Clone(raw):
@@ -146,10 +150,10 @@ func (d *Device) writeReport(raw []byte) error {
 
 	n, err := d.device.Write(report)
 	if err != nil {
-		return fmt.Errorf("write HID report: %w", err)
+		return ErrWrite
 	}
 	if n != len(report) {
-		return fmt.Errorf("%w: wrote %d bytes, want %d", ErrShortReport, n, len(report))
+		return ErrShortReport
 	}
 	return nil
 }
@@ -157,7 +161,10 @@ func (d *Device) writeReport(raw []byte) error {
 func (d *Device) Close() error {
 	d.closeTransport()
 	<-d.writerDone
-	return d.device.Close()
+	if err := d.device.Close(); err != nil {
+		return ErrClose
+	}
+	return nil
 }
 
 func (d *Device) closeTransport() {

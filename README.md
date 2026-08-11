@@ -122,10 +122,13 @@ Windows AimeIO DLL:
 
 ```sh
 cd impl/dll
+go install mvdan.cc/garble@v0.14.2
 make dll
 ```
 
-A Windows cgo toolchain is required to build `build/aimeio.dll`.
+A Windows cgo toolchain and Garble `v0.14.2` are required to build the compact
+`build/aimeio.dll`. Use `make dll-plain` for a stripped build with runtime
+diagnostics.
 
 ## Documentation
 

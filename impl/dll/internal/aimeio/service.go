@@ -3,17 +3,18 @@ package aimeio
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"sync/atomic"
 	"time"
 
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	"github.com/Yeuoly/pareader/impl/dll/internal/hid"
 	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
 
-var (
-	ErrTimeout      = errors.New("PA Reader request timed out")
-	ErrDisconnected = errors.New("PA Reader disconnected")
+const (
+	ErrTimeout      errcode.Code = "E0501"
+	ErrDisconnected errcode.Code = "E0502"
+	ErrContextDone  errcode.Code = "E0503"
 )
 
 type readFailure struct {
@@ -73,7 +74,7 @@ func (s *Service) Version(ctx context.Context) (protocol.Version, error) {
 	case <-time.After(s.timeout):
 		return protocol.Version{}, ErrTimeout
 	case <-ctx.Done():
-		return protocol.Version{}, ctx.Err()
+		return protocol.Version{}, ErrContextDone
 	case <-s.done:
 		return protocol.Version{}, s.disconnectedError()
 	}
@@ -135,5 +136,5 @@ func (s *Service) disconnectedError() error {
 	if failure == nil || failure.err == nil {
 		return ErrDisconnected
 	}
-	return errors.Join(ErrDisconnected, failure.err)
+	return failure.err
 }

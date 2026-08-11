@@ -2,8 +2,8 @@ package protocol
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
+
+	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 )
 
 const (
@@ -32,12 +32,13 @@ const (
 	StatusInvalidMessage Status = 0x02
 )
 
-var (
-	ErrInvalidReport  = errors.New("invalid PRHP report")
-	ErrInvalidType    = errors.New("invalid PRHP message type")
-	ErrUnexpectedCode = errors.New("unexpected PRHP opcode")
-	ErrUnexpectedType = errors.New("unexpected PRHP message type")
-	ErrUnknownCard    = errors.New("unknown PRHP card type")
+const (
+	ErrInvalidReport  errcode.Code = "E0401"
+	ErrInvalidType    errcode.Code = "E0402"
+	ErrUnexpectedCode errcode.Code = "E0403"
+	ErrUnexpectedType errcode.Code = "E0404"
+	ErrUnknownCard    errcode.Code = "E0405"
+	ErrCommandFailed  errcode.Code = "E0406"
 )
 
 type Header struct {
@@ -53,12 +54,17 @@ type StatusError struct {
 }
 
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("PRHP opcode 0x%02X failed with status 0x%02X", e.Opcode, byte(e.Status))
+	return ErrCommandFailed.Error()
+}
+
+func (e *StatusError) Is(target error) bool {
+	code, ok := target.(errcode.Code)
+	return ok && code == ErrCommandFailed
 }
 
 func DecodeHeader(raw []byte) (Header, error) {
 	if len(raw) != ReportSize {
-		return Header{}, fmt.Errorf("%w: got %d bytes, want %d", ErrInvalidReport, len(raw), ReportSize)
+		return Header{}, ErrInvalidReport
 	}
 
 	header := Header{
@@ -71,18 +77,18 @@ func DecodeHeader(raw []byte) (Header, error) {
 	switch header.Type {
 	case MessageRequest:
 		if header.Sequence == 0 || header.Status != StatusSuccess {
-			return Header{}, fmt.Errorf("%w: invalid REQUEST header", ErrInvalidReport)
+			return Header{}, ErrInvalidReport
 		}
 	case MessageResponse:
 		if header.Sequence == 0 {
-			return Header{}, fmt.Errorf("%w: invalid RESPONSE header", ErrInvalidReport)
+			return Header{}, ErrInvalidReport
 		}
 	case MessageSignal:
 		if header.Sequence != 0 || header.Status != StatusSuccess {
-			return Header{}, fmt.Errorf("%w: invalid SIGNAL header", ErrInvalidReport)
+			return Header{}, ErrInvalidReport
 		}
 	default:
-		return Header{}, fmt.Errorf("%w: 0x%02X", ErrInvalidType, byte(header.Type))
+		return Header{}, ErrInvalidType
 	}
 
 	return header, nil
@@ -109,10 +115,10 @@ func validateResponse(raw []byte, opcode byte) (Header, error) {
 		return Header{}, err
 	}
 	if header.Type != MessageResponse {
-		return Header{}, fmt.Errorf("%w: got 0x%02X, want RESPONSE", ErrUnexpectedType, byte(header.Type))
+		return Header{}, ErrUnexpectedType
 	}
 	if header.Opcode != opcode {
-		return Header{}, fmt.Errorf("%w: got 0x%02X, want 0x%02X", ErrUnexpectedCode, header.Opcode, opcode)
+		return Header{}, ErrUnexpectedCode
 	}
 	if header.Status != StatusSuccess {
 		return Header{}, &StatusError{Opcode: header.Opcode, Status: header.Status}
