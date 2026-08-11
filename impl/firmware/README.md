@@ -34,7 +34,14 @@ Connect the ESP32-S3 native USB port rather than a UART-only bridge.
 
 TinyUSB callbacks copy PRHP Output reports and CDC input into one FreeRTOS
 queue. The main task services that queue and performs an NFC observation about
-every 500 ms.
+every 200 ms.
+
+The reader layer begins FeliCa polling with transit system code `0x0003` so
+wallet-based cards such as Mobile Suica can be selected directly. A scan that
+finds no FeliCa target changes the next FeliCa scan to wildcard system code
+`0xFFFF`, or back to `0x0003`. Once a system code finds a target, it remains
+selected until that target is no longer observed. The PN532 layer only encodes
+the caller-provided system code and owns no card-selection policy.
 
 The task stores only one card value:
 

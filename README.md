@@ -22,7 +22,7 @@ AimeIO DLL  <---- PRHP HID ---+--- ESP32-S3 --- I2C --- PN532
 Spice2x     <---- CardIO HID -+
 ```
 
-The firmware scans the NFC field approximately every 500 ms and stores one
+The firmware scans the NFC field approximately every 200 ms and stores one
 current card observation. It publishes only transitions:
 
 - a newly observed card is sent once;
@@ -33,6 +33,11 @@ current card observation. It publishes only transitions:
 The same transition is encoded independently for both HID interfaces. The
 PRHP DLL updates an atomic in-memory card state. Spice2x consumes CardIO
 directly; the DLL does not open or process the CardIO interface.
+
+FeliCa polling starts with transit system code `0x0003`, which directly selects
+Mobile Suica and other compatible wallet-based transit cards. When no target
+answers, the next observation uses wildcard system code `0xFFFF`. A system
+code that finds a card remains selected while that card is present.
 
 ## USB interfaces
 
@@ -97,8 +102,9 @@ The PN532 uses 7-bit I2C address `0x24` at 100 kHz. SDA and SCL are
 configurable under **PA Reader** in `idf.py menuconfig`. Use the ESP32-S3 native
 USB port; a USB-to-UART bridge cannot expose these interfaces.
 
-PN532 supports the project’s MIFARE and FeliCa paths. It does not provide the
-ISO/IEC 15693 support used by some older e-amusement cards.
+PN532 supports the project’s MIFARE and FeliCa paths, including physical
+FeliCa cards and Mobile Suica-compatible virtual cards. It does not provide
+the ISO/IEC 15693 support used by some older e-amusement cards.
 
 ## Build
 

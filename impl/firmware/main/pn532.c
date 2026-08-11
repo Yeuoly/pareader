@@ -253,9 +253,20 @@ esp_err_t pn532_poll_type_a(pn532_type_a_target_t *target, bool *found)
     return ESP_OK;
 }
 
-esp_err_t pn532_poll_felica(pn532_felica_target_t *target, bool *found)
+esp_err_t pn532_poll_felica(
+        uint16_t system_code,
+        pn532_felica_target_t *target,
+        bool *found)
 {
-    const uint8_t request[] = {0x01, 0x01, 0x00, 0xFF, 0xFF, 0x01, 0x00};
+    const uint8_t request[] = {
+        0x01,
+        0x01,
+        0x00,
+        (uint8_t) (system_code >> 8),
+        (uint8_t) system_code,
+        0x01,
+        0x00,
+    };
     uint8_t response[64];
     size_t size = 0;
     ESP_RETURN_ON_ERROR(

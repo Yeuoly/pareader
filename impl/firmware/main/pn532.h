@@ -23,7 +23,10 @@ typedef struct {
 esp_err_t pn532_init(void);
 esp_err_t pn532_set_radio(bool enabled);
 esp_err_t pn532_poll_type_a(pn532_type_a_target_t *target, bool *found);
-esp_err_t pn532_poll_felica(pn532_felica_target_t *target, bool *found);
+esp_err_t pn532_poll_felica(
+        uint16_t system_code,
+        pn532_felica_target_t *target,
+        bool *found);
 esp_err_t pn532_mifare_authenticate(
         uint8_t target,
         uint8_t command,

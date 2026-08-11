@@ -9,6 +9,8 @@
 #include "sega.h"
 #include "usb_device.h"
 
+#define CARD_SCAN_INTERVAL_US 200000
+
 void app_main(void)
 {
     ESP_ERROR_CHECK(reader_init());
@@ -31,7 +33,7 @@ void app_main(void)
         if (now < next_scan) {
             continue;
         }
-        next_scan = now + 500000;
+        next_scan = now + CARD_SCAN_INTERVAL_US;
 
         reader_card_t observed;
         if (reader_read_card(&observed) != ESP_OK ||

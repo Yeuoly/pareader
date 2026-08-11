@@ -272,7 +272,7 @@ needed. On HID disconnection, the service replaces the card with `NONE`.
 
 ## Firmware card observation
 
-The firmware stores exactly one raw observation. About every 500 ms it reads
+The firmware stores exactly one raw observation. About every 200 ms it reads
 the PN532 and compares the result with that value:
 
 ```c
@@ -295,6 +295,14 @@ This single comparison defines both HID outputs:
 - repeated empty observations produce no report.
 
 There is no second published-card value and no separate scan-state machine.
+
+FeliCa target selection is owned by `reader`, not by the PN532 transport. The
+transport accepts a 16-bit system code and puts its two bytes into the Polling
+request. `reader` starts with transit system code `0x0003`, switches between
+`0x0003` and wildcard `0xFFFF` only after a scan finds no FeliCa target, and
+retains a successful system code while the target remains present. This
+supports Mobile Suica-compatible virtual cards without exposing card-specific
+policy to `pn532`, PRHP, CardIO, or the DLL.
 
 ### PRHP encoding
 

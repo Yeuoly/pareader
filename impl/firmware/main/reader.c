@@ -9,10 +9,16 @@
 static const uint8_t default_aime_key[6] = {0x57, 0x43, 0x43, 0x46, 0x76, 0x32};
 static const uint8_t default_bana_key[6] = {0x60, 0x90, 0xD0, 0x06, 0x32, 0xF5};
 
+enum {
+    FELICA_SYSTEM_CODE_TRANSIT = 0x0003,
+    FELICA_SYSTEM_CODE_WILDCARD = 0xFFFF,
+};
+
 static uint8_t mifare_keys[2][6];
 static uint8_t active_key_type;
 static pn532_type_a_target_t active_mifare;
 static pn532_felica_target_t active_felica;
+static uint16_t felica_system_code = FELICA_SYSTEM_CODE_TRANSIT;
 static bool radio_enabled = true;
 
 static bool valid_luid(const uint8_t luid[10])
@@ -71,12 +77,17 @@ esp_err_t reader_read_card(reader_card_t *card)
     }
 
     bool found = false;
-    esp_err_t err = pn532_poll_felica(&active_felica, &found);
-    if (err == ESP_OK && found) {
-        card->type = READER_CARD_FELICA;
-        memcpy(card->idm, active_felica.idm, sizeof(card->idm));
-        memcpy(card->pmm, active_felica.pmm, sizeof(card->pmm));
-        return ESP_OK;
+    esp_err_t err = pn532_poll_felica(felica_system_code, &active_felica, &found);
+    if (err == ESP_OK) {
+        if (found) {
+            card->type = READER_CARD_FELICA;
+            memcpy(card->idm, active_felica.idm, sizeof(card->idm));
+            memcpy(card->pmm, active_felica.pmm, sizeof(card->pmm));
+            return ESP_OK;
+        }
+        felica_system_code = felica_system_code == FELICA_SYSTEM_CODE_TRANSIT
+                ? FELICA_SYSTEM_CODE_WILDCARD
+                : FELICA_SYSTEM_CODE_TRANSIT;
     }
 
     ESP_RETURN_ON_ERROR(pn532_poll_type_a(&active_mifare, &found), "reader", "Type A poll failed");
