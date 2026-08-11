@@ -27,9 +27,8 @@ Set the Elechouse NFC Module V3 to I2C mode before power-up:
 | `GND` | GND | Common ground |
 | `VCC` | 3V3 | Module supply |
 
-Pins and optional RGB LED outputs are configurable with `idf.py menuconfig`
-under **PA Reader**. Connect the ESP32-S3 native USB port rather than a
-UART-only bridge.
+The I2C pins are configurable with `idf.py menuconfig` under **PA Reader**.
+Connect the ESP32-S3 native USB port rather than a UART-only bridge.
 
 ## Runtime
 
@@ -60,8 +59,9 @@ the same observation as Report ID 1 for MIFARE or Report ID 2 for FeliCa. An
 empty CardIO state is an all-zero report. Neither output requires a Host card
 request.
 
-The CDC path remains command-driven and implements SEGA framing, NFC commands,
-and LED commands independently of both HID protocols.
+The CDC path remains command-driven and implements SEGA framing and NFC
+commands independently of both HID protocols. SEGA and PRHP LED commands are
+accepted for interface compatibility and intentionally have no hardware effect.
 
 ## Build and flash
 

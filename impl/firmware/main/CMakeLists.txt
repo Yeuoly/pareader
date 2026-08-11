@@ -8,5 +8,5 @@ idf_component_register(
         "sega.c"
         "usb_device.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_driver_gpio esp_driver_i2c esp_driver_ledc esp_timer
+    REQUIRES esp_driver_gpio esp_driver_i2c esp_timer
 )

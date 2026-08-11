@@ -2,7 +2,6 @@
 
 #include <string.h>
 
-#include "driver/ledc.h"
 #include "esp_check.h"
 
 #include "pn532.h"
@@ -60,35 +59,6 @@ esp_err_t reader_init(void)
 {
     memcpy(mifare_keys[READER_KEY_AIME], default_aime_key, sizeof(default_aime_key));
     memcpy(mifare_keys[READER_KEY_BANA], default_bana_key, sizeof(default_bana_key));
-
-#if CONFIG_PAREADER_LED_ENABLED
-    const ledc_timer_config_t timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = LEDC_TIMER_8_BIT,
-        .timer_num = LEDC_TIMER_0,
-        .freq_hz = 5000,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
-    ESP_RETURN_ON_ERROR(ledc_timer_config(&timer), "reader", "LED timer failed");
-
-    const int pins[3] = {
-        CONFIG_PAREADER_LED_RED_GPIO,
-        CONFIG_PAREADER_LED_GREEN_GPIO,
-        CONFIG_PAREADER_LED_BLUE_GPIO,
-    };
-    for (int channel = 0; channel < 3; ++channel) {
-        const ledc_channel_config_t output = {
-            .gpio_num = pins[channel],
-            .speed_mode = LEDC_LOW_SPEED_MODE,
-            .channel = channel,
-            .intr_type = LEDC_INTR_DISABLE,
-            .timer_sel = LEDC_TIMER_0,
-            .duty = 0,
-            .hpoint = 0,
-        };
-        ESP_RETURN_ON_ERROR(ledc_channel_config(&output), "reader", "LED channel failed");
-    }
-#endif
 
     return pn532_init();
 }
@@ -220,15 +190,7 @@ esp_err_t reader_radio_set(bool enabled)
 
 void reader_set_led(uint8_t red, uint8_t green, uint8_t blue)
 {
-#if CONFIG_PAREADER_LED_ENABLED
-    const uint8_t values[3] = {red, green, blue};
-    for (int channel = 0; channel < 3; ++channel) {
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, values[channel]);
-        ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
-    }
-#else
     (void) red;
     (void) green;
     (void) blue;
-#endif
 }

@@ -22,7 +22,7 @@ complete HID Input reports.
 Every message explicitly declares whether it is a request, response, or
 one-way signal. Responses copy a non-zero 16-bit request sequence. Signals use
 no sequence. Version 0.1 defines protocol-version query, card-state delivery,
-and LED control. PN532 commands and other NFC-controller details never cross
+and an LED compatibility signal. PN532 commands and other NFC-controller details never cross
 the HID boundary.
 
 ## 1. Conventions
@@ -222,7 +222,8 @@ and does not modify the stored state.
 | 1 | 1 | `green` |
 | 2 | 1 | `blue` |
 
-Each intensity is 0 through 255. No response is emitted.
+Each intensity is 0 through 255. The Reader accepts and ignores the values;
+physical LED output is not part of PRHP. No response is emitted.
 
 ## 10. Failure and Extensibility
 

@@ -305,7 +305,8 @@ usb_device_send_prhp(signal);
 
 Incoming PRHP commands are still dispatched synchronously. `GET_VERSION`
 copies its request sequence into one response; `SET_LED` is a signal and emits
-no response. The firmware has no sequence map.
+no response. `SET_LED` is accepted only for interface compatibility and has no
+hardware effect. The firmware has no sequence map.
 
 ### CardIO encoding
 
