@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/karalabe/hid v1.0.0
+	github.com/sstallion/go-hid v0.15.0
 )
 
 require (

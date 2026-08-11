@@ -31,10 +31,19 @@ static esp_err_t wait_ready(uint32_t timeout_ms)
     const int64_t deadline = esp_timer_get_time() + (int64_t) timeout_ms * 1000;
     while (esp_timer_get_time() < deadline) {
         uint8_t status = 0;
-        ESP_RETURN_ON_ERROR(
-                i2c_master_receive(device, &status, sizeof(status), PN532_I2C_TRANSFER_TIMEOUT_MS),
-                "pn532",
-                "status read failed");
+        const esp_err_t result = i2c_master_receive(
+                device,
+                &status,
+                sizeof(status),
+                PN532_I2C_TRANSFER_TIMEOUT_MS);
+        // PN532 NACKs its I2C read address while a command is still running.
+        // ESP-IDF reports that NACK as ESP_ERR_INVALID_STATE, so it means
+        // "not ready yet" here rather than a broken bus.
+        if (result == ESP_ERR_INVALID_STATE) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            continue;
+        }
+        ESP_RETURN_ON_ERROR(result, "pn532", "status read failed");
         if ((status & PN532_I2C_READY) != 0) {
             return ESP_OK;
         }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	khid "github.com/karalabe/hid"
+	khid "github.com/sstallion/go-hid"
 
 	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
@@ -55,37 +55,47 @@ func Open(config DeviceConfig) (*Device, DeviceInfo, error) {
 		config.Usage = DefaultUsage
 	}
 
-	for _, candidate := range khid.Enumerate(config.VendorID, config.ProductID) {
+	configureOpenMode()
+
+	var selected *khid.DeviceInfo
+	err := khid.Enumerate(config.VendorID, config.ProductID, func(candidate *khid.DeviceInfo) error {
 		if candidate.UsagePage != config.UsagePage || candidate.Usage != config.Usage {
-			continue
+			return nil
 		}
-		if config.Serial != "" && candidate.Serial != config.Serial {
-			continue
+		if config.Serial != "" && candidate.SerialNbr != config.Serial {
+			return nil
 		}
-
-		device, err := candidate.Open()
-		if err != nil {
-			return nil, DeviceInfo{}, fmt.Errorf("open PA Reader HID: %w", err)
-		}
-		transport := &Device{
-			device:     device,
-			writes:     make(chan []byte, 64),
-			done:       make(chan struct{}),
-			writerDone: make(chan struct{}),
-		}
-		go transport.writeLoop()
-
-		return transport, DeviceInfo{
-			Path:         candidate.Path,
-			VendorID:     candidate.VendorID,
-			ProductID:    candidate.ProductID,
-			Serial:       candidate.Serial,
-			Manufacturer: candidate.Manufacturer,
-			Product:      candidate.Product,
-		}, nil
+		copy := *candidate
+		selected = &copy
+		return nil
+	})
+	if err != nil {
+		return nil, DeviceInfo{}, fmt.Errorf("enumerate PA Reader HID: %w", err)
+	}
+	if selected == nil {
+		return nil, DeviceInfo{}, ErrDeviceNotFound
 	}
 
-	return nil, DeviceInfo{}, ErrDeviceNotFound
+	device, err := khid.OpenPath(selected.Path)
+	if err != nil {
+		return nil, DeviceInfo{}, fmt.Errorf("open PA Reader HID: %w", err)
+	}
+	transport := &Device{
+		device:     device,
+		writes:     make(chan []byte, 64),
+		done:       make(chan struct{}),
+		writerDone: make(chan struct{}),
+	}
+	go transport.writeLoop()
+
+	return transport, DeviceInfo{
+		Path:         selected.Path,
+		VendorID:     selected.VendorID,
+		ProductID:    selected.ProductID,
+		Serial:       selected.SerialNbr,
+		Manufacturer: selected.MfrStr,
+		Product:      selected.ProductStr,
+	}, nil
 }
 
 func (d *Device) Read() ([]byte, error) {
