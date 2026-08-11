@@ -1,0 +1,19 @@
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+.cache/
+.clangd/
+*.swp
+*~
+
+# Go build and test output
+/impl/dll/build/
+*.test
+coverage.out
+
+# ESP-IDF generated output and local configuration
+/impl/firmware/build/
+/impl/firmware/managed_components/
+/impl/firmware/sdkconfig
+/impl/firmware/sdkconfig.old
