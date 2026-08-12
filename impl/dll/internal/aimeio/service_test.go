@@ -1,10 +1,12 @@
 package aimeio
 
 import (
+	"encoding/binary"
 	"io"
 	"testing"
 	"time"
 
+	"github.com/Yeuoly/pareader/impl/dll/internal/hid"
 	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
 
@@ -32,8 +34,12 @@ func (t *fakeTransport) Read() ([]byte, error) {
 }
 
 func (t *fakeTransport) Write(raw []byte) error {
-	t.writes <- raw
-	return nil
+	select {
+	case t.writes <- raw:
+		return nil
+	case <-t.done:
+		return io.EOF
+	}
 }
 
 func (t *fakeTransport) Close() error {
@@ -47,8 +53,11 @@ func (t *fakeTransport) Close() error {
 
 func TestCardStateSignalUpdatesCache(t *testing.T) {
 	transport := newFakeTransport()
-	service := NewService(transport, time.Second)
-	defer service.Close()
+	session := newSession(transport, time.Second)
+	defer func() {
+		_ = session.Close()
+		<-session.Done()
+	}()
 
 	signal := make([]byte, protocol.ReportSize)
 	signal[0] = byte(protocol.MessageSignal)
@@ -58,10 +67,10 @@ func TestCardStateSignalUpdatesCache(t *testing.T) {
 	transport.reads <- signal
 
 	deadline := time.Now().Add(time.Second)
-	for service.CurrentCard().Type != protocol.CardFeliCa && time.Now().Before(deadline) {
+	for session.CurrentCard().Type != protocol.CardFeliCa && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if got := protocol.FormatIDm(service.CurrentCard().IDm); got != "0102030405060708" {
+	if got := protocol.FormatIDm(session.CurrentCard().IDm); got != "0102030405060708" {
 		t.Fatalf("unexpected IDm %s", got)
 	}
 
@@ -69,10 +78,74 @@ func TestCardStateSignalUpdatesCache(t *testing.T) {
 	none[0] = byte(protocol.MessageSignal)
 	none[1] = protocol.OpcodeCardState
 	transport.reads <- none
-	for service.CurrentCard().Type != protocol.CardNone && time.Now().Before(deadline) {
+	for session.CurrentCard().Type != protocol.CardNone && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if service.CurrentCard().Type != protocol.CardNone {
+	if session.CurrentCard().Type != protocol.CardNone {
 		t.Fatal("card state was not cleared")
+	}
+}
+
+func TestServiceReconnectsAfterReadLoopExits(t *testing.T) {
+	devices := make(chan *fakeTransport, 2)
+	open := func() (hid.Transport, hid.DeviceInfo, error) {
+		select {
+		case transport := <-devices:
+			return transport, hid.DeviceInfo{Serial: "test"}, nil
+		default:
+			return nil, hid.DeviceInfo{}, hid.ErrDeviceNotFound
+		}
+	}
+
+	first := newFakeTransport()
+	devices <- first
+	service := newService(open, time.Second, time.Millisecond)
+	defer service.Close()
+	respondToVersion(t, first)
+	waitForConnection(t, service)
+
+	_ = first.Close()
+	deadline := time.Now().Add(time.Second)
+	for service.Err() == nil && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if service.Err() == nil {
+		t.Fatal("service did not observe disconnection")
+	}
+
+	second := newFakeTransport()
+	devices <- second
+	respondToVersion(t, second)
+	waitForConnection(t, service)
+}
+
+func respondToVersion(t *testing.T, transport *fakeTransport) {
+	t.Helper()
+	select {
+	case request := <-transport.writes:
+		header, err := protocol.DecodeHeader(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := make([]byte, protocol.ReportSize)
+		response[0] = byte(protocol.MessageResponse)
+		response[1] = protocol.OpcodeGetVersion
+		binary.LittleEndian.PutUint16(response[2:4], header.Sequence)
+		response[5] = 0
+		response[6] = 1
+		transport.reads <- response
+	case <-time.After(time.Second):
+		t.Fatal("version request was not written")
+	}
+}
+
+func waitForConnection(t *testing.T, service *Service) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for service.Err() != nil && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if service.Err() != nil {
+		t.Fatalf("service did not connect: %v", service.Err())
 	}
 }

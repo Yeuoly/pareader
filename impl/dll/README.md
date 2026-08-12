@@ -6,10 +6,20 @@ Spice2x opens the separate CardIO interface itself.
 
 ## Runtime model
 
-One goroutine continuously reads HID Input reports. The router sends
-`RESPONSE` reports to the sequence caller and sends `CARD_STATE` signals to the
-card handler. The handler decodes the signal and atomically replaces one
-in-memory value:
+One process-level service supervises HID connections. `aime_io_init` starts
+that service and succeeds even when no reader is connected. While disconnected,
+the service enumerates a matching PRHP interface every 500 ms. Each successful
+open creates one session with one blocking reader goroutine:
+
+```text
+open HID -> start ReadLoop -> verify PRHP version -> online
+    ^                                              |
+    +--- wait 500 ms <- ReadLoop returns error <---+
+```
+
+The router sends `RESPONSE` reports to the session's sequence caller and sends
+`CARD_STATE` signals to its card handler. The handler decodes the signal and
+atomically replaces the session's current card:
 
 ```go
 router.Handle(protocol.OpcodeCardState, func(raw []byte) error {
@@ -17,15 +27,19 @@ router.Handle(protocol.OpcodeCardState, func(raw []byte) error {
     if err != nil {
         return err
     }
-    service.latest.Store(&card)
+    session.latest.Store(&card)
     return nil
 })
 ```
 
+The blocking ReadLoop is the connection lifetime. When it returns, the service
+removes that session, exposes `NONE`, closes the old HID handle, and resumes
+enumeration. There is no heartbeat or online-state polling.
+
 There is no card-read request. `aime_io_nfc_poll` remains exported for ABI
-compatibility but performs no transport operation. `aime_io_nfc_get_aime_id`,
-`aime_io_nfc_get_mifare_card_id`, and `aime_io_nfc_get_felica_id` read the
-latest state.
+compatibility but performs no transport operation. While disconnected, the
+card getters return `S_FALSE`, which is the same ABI result as no card being
+present. Reconnecting does not require another call from Segatools.
 
 HID writes are copied into a bounded queue and owned by one writer goroutine.
 Request-response commands such as `GET_VERSION` still use sequence allocation
@@ -112,4 +126,4 @@ ranges identify the responsible layer.
 | `E0501` | `aimeio.ErrTimeout` | Request timed out |
 | `E0502` | `aimeio.ErrDisconnected` | Service stopped without a transport error |
 | `E0503` | `aimeio.ErrContextDone` | Request context was canceled or expired |
-| `E0601` | `errUnsupportedVersion` | Terminal reader received an unsupported PRHP version |
+| `E0504` | `aimeio.ErrUnsupportedVersion` | Connected reader uses an unsupported PRHP version |

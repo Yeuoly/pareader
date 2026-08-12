@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -11,8 +10,8 @@ import (
 
 	"github.com/Yeuoly/pareader/impl/dll/internal/aimeio"
 	"github.com/Yeuoly/pareader/impl/dll/internal/config"
-	"github.com/Yeuoly/pareader/impl/dll/internal/errcode"
 	pareaderhid "github.com/Yeuoly/pareader/impl/dll/internal/hid"
+	"github.com/Yeuoly/pareader/impl/dll/internal/protocol"
 )
 
 func main() {
@@ -39,32 +38,22 @@ func run() error {
 		return config.ErrInvalidProductID
 	}
 
-	device, info, err := pareaderhid.Open(pareaderhid.DeviceConfig{
+	deviceConfig := pareaderhid.DeviceConfig{
 		VendorID:  vid,
 		ProductID: pid,
 		UsagePage: pareaderhid.DefaultUsagePage,
 		Usage:     pareaderhid.DefaultUsage,
 		Serial:    *serial,
-	})
-	if err != nil {
-		return err
 	}
-
-	service := aimeio.NewService(device, *timeout)
+	service := aimeio.NewService(deviceConfig, *timeout)
 	defer service.Close()
 
-	version, err := service.Version(context.Background())
-	if err != nil {
-		return err
-	}
-	if version.Major != 0 || version.Minor != 1 {
-		return errUnsupportedVersion
-	}
-
-	model := newModel(service, info, version, *interval)
+	model := newModel(service, pareaderhid.DeviceInfo{
+		VendorID:  vid,
+		ProductID: pid,
+		Product:   "PA Reader",
+	}, protocol.Version{Major: 0, Minor: 1}, *interval)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 	_, err = program.Run()
 	return err
 }
-
-const errUnsupportedVersion errcode.Code = "E0601"

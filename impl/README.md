@@ -229,8 +229,8 @@ using sequence or opcode.
 
 ## AimeIO card state
 
-The firmware originates `CARD_STATE`. The DLL signal handler decodes the
-operation body and atomically replaces one immutable fixed-size card value:
+The firmware originates `CARD_STATE`. Each HID session decodes the operation
+body and atomically replaces one immutable fixed-size card value:
 
 ```go
 router.Handle(protocol.OpcodeCardState, func(raw []byte) error {
@@ -238,7 +238,7 @@ router.Handle(protocol.OpcodeCardState, func(raw []byte) error {
     if err != nil {
         return err
     }
-    service.latest.Store(&card)
+    session.latest.Store(&card)
     return nil
 })
 ```
@@ -267,8 +267,13 @@ func (s *Service) FeliCaID() (uint64, bool) {
 }
 ```
 
-No polling goroutine, card request, per-card channel, or service mutex is
-needed. On HID disconnection, the service replaces the card with `NONE`.
+The process-level service owns only connection supervision. `aime_io_init`
+starts it even if the reader is absent. A session owns one blocking ReadLoop;
+when that loop returns, the service removes the session, exposes `NONE`, and
+tries to open a matching HID interface again after 500 ms. No heartbeat,
+service mutex, card request, or per-card channel is needed. The AimeIO getters
+return `S_FALSE` while disconnected, so Segatools does not need to reinitialize
+the DLL after a hot plug.
 
 ## Firmware card observation
 

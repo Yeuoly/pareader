@@ -16,9 +16,11 @@ import (
 type refreshNowMsg struct{}
 
 type refreshResultMsg struct {
-	card protocol.Card
-	err  error
-	at   time.Time
+	card      protocol.Card
+	device    pareaderhid.DeviceInfo
+	connected bool
+	err       error
+	at        time.Time
 }
 
 type model struct {
@@ -89,6 +91,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case refreshResultMsg:
 		m.err = message.err
+		if message.connected {
+			m.device = message.device
+		}
 		if message.err == nil {
 			m.card = message.card
 			if identifier := cardIdentifier(message.card); identifier != "" {
@@ -170,7 +175,14 @@ func (m model) View() string {
 
 func refreshCardState(service *aimeio.Service) tea.Cmd {
 	return func() tea.Msg {
-		return refreshResultMsg{card: service.CurrentCard(), err: service.Err(), at: time.Now()}
+		device, connected := service.DeviceInfo()
+		return refreshResultMsg{
+			card:      service.CurrentCard(),
+			device:    device,
+			connected: connected,
+			err:       service.Err(),
+			at:        time.Now(),
+		}
 	}
 }
 

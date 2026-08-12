@@ -11,13 +11,11 @@ typedef int32_t HRESULT;
 import "C"
 
 import (
-	"context"
 	"sync/atomic"
 	"unsafe"
 
 	"github.com/Yeuoly/pareader/impl/dll/internal/aimeio"
 	"github.com/Yeuoly/pareader/impl/dll/internal/config"
-	pareaderhid "github.com/Yeuoly/pareader/impl/dll/internal/hid"
 )
 
 const (
@@ -49,17 +47,7 @@ func aime_io_init() C.HRESULT {
 	if err != nil {
 		return result(eFail)
 	}
-	device, _, err := pareaderhid.Open(settings.Device)
-	if err != nil {
-		return result(eFail)
-	}
-
-	service := aimeio.NewService(device, settings.Timeout)
-	version, err := service.Version(context.Background())
-	if err != nil || version.Major != 0 || version.Minor != 1 {
-		_ = service.Close()
-		return result(eFail)
-	}
+	service := aimeio.NewService(settings.Device, settings.Timeout)
 
 	if !activeService.CompareAndSwap(nil, service) {
 		_ = service.Close()

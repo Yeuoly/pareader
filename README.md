@@ -58,7 +58,10 @@ Reader-to-Host `CARD_STATE` signal; there is no `READ_CARD` command.
 
 The optional AimeIO DLL keeps synchronous exported functions while its HID
 reader and writer run in goroutines. `aime_io_nfc_poll` is a compatibility
-no-op, and the card getters read the latest atomically stored state.
+no-op, and the card getters read the latest atomically stored state. The DLL
+supports hot plugging: initialization succeeds without a connected reader,
+and HID disconnection automatically clears the card state and starts a
+background reconnect loop.
 
 ### CardIO
 

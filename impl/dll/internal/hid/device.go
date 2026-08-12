@@ -48,6 +48,7 @@ type Device struct {
 	writes     chan []byte
 	done       chan struct{}
 	writerDone chan struct{}
+	stopping   atomic.Bool
 	closed     atomic.Bool
 }
 
@@ -106,9 +107,11 @@ func (d *Device) Read() ([]byte, error) {
 	raw := make([]byte, protocol.ReportSize)
 	n, err := d.device.Read(raw)
 	if err != nil {
+		d.stop()
 		return nil, ErrRead
 	}
 	if n != protocol.ReportSize {
+		d.stop()
 		return nil, ErrShortReport
 	}
 	return raw, nil
@@ -117,6 +120,9 @@ func (d *Device) Read() ([]byte, error) {
 func (d *Device) Write(raw []byte) error {
 	if len(raw) != protocol.ReportSize {
 		return protocol.ErrInvalidReport
+	}
+	if d.stopping.Load() {
+		return ErrClosed
 	}
 	select {
 	case d.writes <- bytes.Clone(raw):
@@ -132,7 +138,8 @@ func (d *Device) writeLoop() {
 		select {
 		case raw := <-d.writes:
 			if err := d.writeReport(raw); err != nil {
-				d.closeTransport()
+				d.stop()
+				_ = d.closeHandle()
 				return
 			}
 		case <-d.done:
@@ -159,16 +166,23 @@ func (d *Device) writeReport(raw []byte) error {
 }
 
 func (d *Device) Close() error {
-	d.closeTransport()
+	d.stop()
 	<-d.writerDone
+	return d.closeHandle()
+}
+
+func (d *Device) closeHandle() error {
+	if !d.closed.CompareAndSwap(false, true) {
+		return nil
+	}
 	if err := d.device.Close(); err != nil {
 		return ErrClose
 	}
 	return nil
 }
 
-func (d *Device) closeTransport() {
-	if d.closed.CompareAndSwap(false, true) {
+func (d *Device) stop() {
+	if d.stopping.CompareAndSwap(false, true) {
 		close(d.done)
 	}
 }
